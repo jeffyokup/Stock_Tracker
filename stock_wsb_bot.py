@@ -3,7 +3,7 @@ import requests
 import time
 
 from discord import Webhook, RequestsWebhookAdapter, Client, AsyncWebhookAdapter
-from config import discord_webhook_url
+from config import discord_webhook_url, vantage_api_key
 
 import csv
 import os
@@ -85,7 +85,7 @@ def get_top_tickers():
 
 
 def post_to_server(data) -> None:
-		data = {"content": data}
+    data = {"content": data}
     response = requests.post(discord_webhook_url, json=data)
     print(response.status_code)
     print(response.content)
@@ -103,12 +103,20 @@ def get_count_reaction_emoji(count):
 
 def create_discord_comment(max_ticker, max_count):
     reaction_emoji = get_count_reaction_emoji(max_count)
-    comment = f'Ticker: {max_ticker} Count: {max_count} ~~~ {reaction_emoji}'
+    percent_change = get_daily_percent_change(max_ticker)
+    move = 'DOWN' if percent_change[0] == '-' else 'UP'
+    comment = f'Ticker: {max_ticker} Count: {max_count} ~~~ {move}: {percent_change} {reaction_emoji}'
     return comment
 
 
 def get_top_x_tickers(num):
     sorted(tickers.items(), key=lambda x: x)
+
+def get_daily_percent_change(ticker):
+    url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + ticker + '&apikey=' + vantage_api_key
+    req = requests.get(url)
+    percent = req.json()['Global Quote']['10. change percent']
+    return percent
 
 
 if __name__ == "__main__":
@@ -117,7 +125,7 @@ if __name__ == "__main__":
     init_ticker_dictionaries(ticker_file_path)
     count = 0
     last_post_time = time.time()
-    min_wait_time = 3600  # 10 min
+    min_wait_time = 100  # 10 min
 
     only_check_for_capd_tickers = True
     if not only_check_for_capd_tickers:
