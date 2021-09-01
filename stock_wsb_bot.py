@@ -2,7 +2,6 @@ import aiohttp
 import requests
 import time
 
-from discord import Webhook, RequestsWebhookAdapter, Client, AsyncWebhookAdapter
 from config import discord_webhook_url, vantage_api_key
 
 import csv
@@ -52,7 +51,7 @@ def get_sentence_analysis(reddit_comment: str) -> list:
     return tokens_with_tags
 
 
-def process_comment(reddit_comment, count, only_check_for_capital_tickers):
+def process_comment(reddit_comment, comment_count, only_check_for_capital_tickers):
     text = reddit_comment.body
     author = reddit_comment.author
     if '' in text.lower():
@@ -70,7 +69,7 @@ def process_comment(reddit_comment, count, only_check_for_capital_tickers):
                 tickers[token] = current_count + 1
                 tokens_mentioned.append(token)
                 print(f'#################### Ticker: {token}, Count: {tickers[token]}####################')
-                print(f'~~~~~~~~~~ {count}, {author} ~~~~~~~~~~')
+                print(f'~~~~~~~~~~ {comment_count}, {author} ~~~~~~~~~~')
                 print(text[0:200] + "  ", "\n\n\n")
 
 
@@ -101,6 +100,7 @@ def get_count_reaction_emoji(count):
     else:
         return ':exploding_head:'
 
+
 def create_discord_comment(max_ticker, max_count):
     reaction_emoji = get_count_reaction_emoji(max_count)
     percent_change = get_daily_percent_change(max_ticker)
@@ -111,6 +111,7 @@ def create_discord_comment(max_ticker, max_count):
 
 def get_top_x_tickers(num):
     sorted(tickers.items(), key=lambda x: x)
+
 
 def get_daily_percent_change(ticker):
     url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + ticker + '&apikey=' + vantage_api_key
