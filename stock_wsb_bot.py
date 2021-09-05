@@ -5,6 +5,7 @@ import time
 import nltk
 import praw
 import requests
+from prawcore.exceptions import Forbidden
 
 from config import discord_webhook_url, finnhub_api_key
 
@@ -55,7 +56,7 @@ def process_comment(reddit_comment, comment_count: int, only_check_for_capital_t
             if not only_check_for_capital_tickers:
                 token = token.upper()
 
-            exclude_list = ['DD']
+            exclude_list = ['DD', 'A']
 
             if tag == 'NNP' and token in tickers and token not in exclude_list and token not in tokens_mentioned:
                 current_count = tickers[token]
@@ -102,55 +103,66 @@ def create_discord_comment(ticker, ticker_count) -> str:
     return comment
 
 
-def get_top_x_tickers(num):
+def get_top_x_tickers(num) -> list:
     sorted_ticker_list = sorted(tickers.items(), key=lambda x: x[1], reverse=True)
     return sorted_ticker_list[0:num]
 
 
-def get_daily_percent_change(ticker: str):
+def get_daily_percent_change(ticker: str) -> int:
     params = {"symbol": ticker, "token": finnhub_api_key}
     data = requests.get('https://finnhub.io/api/v1/quote', params=params)
     percent_daily = data.json()['dp']
     return percent_daily
 
 
-if __name__ == "__main__":
-    print("Starting program")
-
-    ticker_file_path = os.path.join(dirname, 'stock_tickers.csv')
-    init_ticker_dictionaries(ticker_file_path)
+def process_subreddit_comments() -> None:
     count = 0
     last_post_time = time.time()
     min_wait_time = 3600  # 1 hour
 
-    only_check_for_capd_tickers = True
-    if not only_check_for_capd_tickers:
+    only_check_for_capital_tickers = True
+    if not only_check_for_capital_tickers:
         print('Case IN-sensitive ticker search.')
     else:
         print('Case sensitive ticker search.')
 
-    reddit = praw.Reddit('bot1')
-    subreddit = reddit.subreddit("wallstreetbets")
-    comments = subreddit.stream.comments(skip_existing=True)
-    print("Awaiting comments...")
-    for comment in comments:
-        process_comment(comment, count, only_check_for_capd_tickers)
+    while True:
+        try:
+            reddit = praw.Reddit('bot1')
+            subreddit = reddit.subreddit("wallstreetbets")
+            comments = subreddit.stream.comments(skip_existing=True)
+            print("Awaiting comments...")
+            for comment in comments:
+                process_comment(comment, count, only_check_for_capital_tickers)
 
-        current_time = time.time()
-        time_diff = current_time - last_post_time
-        if min_wait_time <= time_diff:
-            last_post_time = current_time
+                current_time = time.time()
+                time_diff = current_time - last_post_time
+                if min_wait_time <= time_diff:
+                    last_post_time = current_time
 
-            top_ticker_list = get_top_x_tickers(5)
-            print(top_ticker_list)
-            if not top_ticker_list:
-                print('No top tickers found.')
-                continue
+                    top_ticker_list = get_top_x_tickers(5)
+                    print(top_ticker_list)
+                    if not top_ticker_list:
+                        print('No top tickers found.')
+                        continue
 
-            for ticker in top_ticker_list:
-                t, v = ticker
-                if v > 0:
-                    comment = create_discord_comment(t, v)
-                    post_to_discord_server(comment)
-            reset_ticker_counts()
-        count += 1
+                    for ticker in top_ticker_list:
+                        t, v = ticker
+                        if v > 0:
+                            comment = create_discord_comment(t, v)
+                            post_to_discord_server(comment)
+                    reset_ticker_counts()
+                count += 1
+        except Forbidden as exp:
+            print(str(exp))
+            print('Sleeping...')
+            time.sleep(60)
+        except Exception:
+            raise
+
+
+if __name__ == "__main__":
+    print("Starting program")
+    ticker_file_path = os.path.join(dirname, 'stock_tickers.csv')
+    init_ticker_dictionaries(ticker_file_path)
+    process_subreddit_comments()
