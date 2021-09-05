@@ -5,9 +5,9 @@ import time
 import nltk
 import praw
 import requests
-
-from config import discord_webhook_url, vantage_api_key
 from prawcore.exceptions import Forbidden
+
+from config import discord_webhook_url, finnhub_api_key
 
 dirname = os.path.dirname(__file__)
 
@@ -98,30 +98,30 @@ def get_count_reaction_emoji(ticker_count: int) -> str:
 def create_discord_comment(ticker, ticker_count) -> str:
     reaction_emoji = get_count_reaction_emoji(ticker_count)
     percent_change = get_daily_percent_change(ticker)
-    move = 'DOWN' if percent_change[0] == '-' else 'UP'
+    move = 'Down' if percent_change < 0 else 'Up'
     comment = f'Ticker: {ticker} Count: {ticker_count} ~~~ {move}: {percent_change} {reaction_emoji}'
     return comment
 
 
-def get_top_x_tickers(num):
+def get_top_x_tickers(num) -> list:
     sorted_ticker_list = sorted(tickers.items(), key=lambda x: x[1], reverse=True)
     return sorted_ticker_list[0:num]
 
 
-def get_daily_percent_change(ticker: str):
-    url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + ticker + '&apikey=' + vantage_api_key
-    req = requests.get(url)
-    percent = req.json()['Global Quote']['10. change percent']
-    return percent
+def get_daily_percent_change(ticker: str) -> int:
+    params = {"symbol": ticker, "token": finnhub_api_key}
+    data = requests.get('https://finnhub.io/api/v1/quote', params=params)
+    percent_daily = data.json()['dp']
+    return percent_daily
 
 
-def process_subreddit_comments():
+def process_subreddit_comments() -> None:
     count = 0
     last_post_time = time.time()
-    min_wait_time = 1800  # 1 hour
+    min_wait_time = 3600  # 1 hour
 
-    only_check_for_capd_tickers = True
-    if not only_check_for_capd_tickers:
+    only_check_for_capital_tickers = True
+    if not only_check_for_capital_tickers:
         print('Case IN-sensitive ticker search.')
     else:
         print('Case sensitive ticker search.')
@@ -133,7 +133,7 @@ def process_subreddit_comments():
             comments = subreddit.stream.comments(skip_existing=True)
             print("Awaiting comments...")
             for comment in comments:
-                process_comment(comment, count, only_check_for_capd_tickers)
+                process_comment(comment, count, only_check_for_capital_tickers)
 
                 current_time = time.time()
                 time_diff = current_time - last_post_time
